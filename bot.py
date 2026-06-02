@@ -28,7 +28,7 @@ app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(start_handler)
 
 
-# --- Главное меню ---
+# --- Главное меню (Перенаправление по кнопкам) ---
 async def menu_choice(update, context):
     text = update.message.text
 
@@ -69,12 +69,6 @@ async def menu_choice(update, context):
 
     elif text == "⏹ Остановить игру в слова":
         await stop_word_game(update, context)
-
-    else:
-        await update.message.reply_text(
-            "Выбери раздел из меню!",
-            reply_markup=main_menu()
-        )
 
 
 # --- Кнопки заметок / напоминаний ---
@@ -135,23 +129,41 @@ async def delete_note_handler(update, context):
     await notes.delete_notes_list(user_id, query=query)
 
 
-# --- Обработка текста ---
-async def notes_text_handler(update, context):
+# --- Единый обработчик ввода текста ---
+async def main_text_handler(update, context):
     note_mode = context.user_data.get("note_mode")
     reminder_mode = context.user_data.get("reminder_mode")
-
     text = update.message.text
 
-    # --- 1. РЕЖИМ ЗАМЕТОК ---
+    # --- 1. СНАЧАЛА ПРОВЕРЯЕМ СЛУЖЕБНЫЕ КНОПКИ МЕНЮ ---
+    # Кнопка "⬅ Назад" добавлена сюда, чтобы возвращать в главное меню
+    menu_buttons = [
+        "📅 Расписание", "📝 Заметки", "⏰ Напоминания", 
+        "🌤 Погода", "🎮 Игры", "🧩 Угадай слово", "⏹ Остановить игру в слова", "⬅ Назад"
+    ]
+    
+    if text in menu_buttons:
+        # Сбрасываем любые фоновые режимы ввода, если нажали кнопку меню
+        context.user_data["note_mode"] = None
+        context.user_data["reminder_mode"] = None
+        
+        if text == "⬅ Назад":
+            await update.message.reply_text("Главное меню:", reply_markup=main_menu())
+        else:
+            await menu_choice(update, context)
+        return  # Строго выходим, чтобы не провалиться в обработку ответов игры!
+
+    # --- 2. РЕЖИМ ЗАМЕТОК ---
     if note_mode == "add":
         context.args = text.split()
         await notes.add_note(update, context)
-        await notes.show_notes_msg(update.effective_user.id, message=update.message)
+        # Меняем имя на правильное:
+        await notes.show_notes_list(update.effective_user.id, message=update.message) 
 
-        context.user_data["note_mode"] = None  # Сбрасываем режим
-        return  # Завершаем обработку
+        context.user_data["note_mode"] = None  
+        return 
 
-    # --- 2. РЕЖИМ НАПОМИНАНИЙ ---
+    # --- 3. РЕЖИМ НАПОМИНАНИЙ ---
     if reminder_mode == "add":
         parts = text.split()
 
@@ -159,7 +171,7 @@ async def notes_text_handler(update, context):
             await update.message.reply_text(
                 "Неверный формат. Используй: <секунды> <текст>, например: 60 Купить хлеб"
             )
-            return  # Не сбрасываем режим, даем пользователю исправиться
+            return  
         else:
             seconds = int(parts[0])
             reminder_text = " ".join(parts[1:])
@@ -186,25 +198,17 @@ async def notes_text_handler(update, context):
                 )
             )
 
-        context.user_data["reminder_mode"] = None  # Сбрасываем режим
+        context.user_data["reminder_mode"] = None  
         return
 
-    # --- 3. НАЖАТИЕ НА КНОПКИ ГЛАВНОГО МЕНЮ ---
-    menu_buttons = [
-        "📅 Расписание", "📝 Заметки", "⏰ Напоминания", 
-        "🌤 Погода", "🎮 Игры", "🧩 Угадай слово", "⏹ Остановить игру в слова"
-    ]
-    if text in menu_buttons:
-        await menu_choice(update, context)
-        return
-
-    # --- 4. ИГРА В СЛОВА И ВСЁ ОСТАЛЬНОЕ ---
+    # --- 4. ЕСЛИ НИ ОДИН РЕЖИМ НЕ АКТИВЕН И ЭТО НЕ МЕНЮ — ОТПРАВЛЯЕМ В ИГРУ В СЛОВА ---
+    # Внутри handle_word_answer стоит проверка user_game.active.
+    # Если игра активна — проверится ответ, если выключена — бот корректно промолчит 
+    # или можно выдать стандартное "Выбери раздел", если игра не запущена.
     await handle_word_answer(update, context)
 
 
 # --- Регистрация всех обработчиков (Хэндлеров) ---
-# app.add_handler(notes.add_handler) # Отключен, так как логика теперь внутри единого текстового хэндлера
-
 app.add_handler(notes.show_handler)
 app.add_handler(notes.delete_handler)
 app.add_handler(reminders.handler)
@@ -217,8 +221,8 @@ app.add_handler(CallbackQueryHandler(notes_button_handler, pattern="^(note_|remi
 app.add_handler(CallbackQueryHandler(view_note_handler, pattern="^view_note_"))
 app.add_handler(CallbackQueryHandler(delete_note_handler, pattern="^delete_note_"))
 
-# Единый обработчик текстовых сообщений
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, notes_text_handler))
+# Единственный перехватчик текста (заменен на обновленную функцию)
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_text_handler))
 
 
 # --- Точка входа для запуска проекта ---
