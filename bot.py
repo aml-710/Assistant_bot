@@ -142,16 +142,16 @@ async def notes_text_handler(update, context):
 
     text = update.message.text
 
-    # --- Если бот сейчас в режиме заметок ---
+    # --- 1. РЕЖИМ ЗАМЕТОК ---
     if note_mode == "add":
         context.args = text.split()
         await notes.add_note(update, context)
         await notes.show_notes_msg(update.effective_user.id, message=update.message)
 
-        context.user_data["note_mode"] = None
-        return
+        context.user_data["note_mode"] = None  # Сбрасываем режим
+        return  # Завершаем обработку
 
-    # --- Если бот сейчас в режиме напоминаний ---
+    # --- 2. РЕЖИМ НАПОМИНАНИЙ ---
     if reminder_mode == "add":
         parts = text.split()
 
@@ -159,6 +159,7 @@ async def notes_text_handler(update, context):
             await update.message.reply_text(
                 "Неверный формат. Используй: <секунды> <текст>, например: 60 Купить хлеб"
             )
+            return  # Не сбрасываем режим, даем пользователю исправиться
         else:
             seconds = int(parts[0])
             reminder_text = " ".join(parts[1:])
@@ -185,18 +186,25 @@ async def notes_text_handler(update, context):
                 )
             )
 
-        context.user_data["reminder_mode"] = None
+        context.user_data["reminder_mode"] = None  # Сбрасываем режим
         return
 
-    # Проверяем ответы в игре (если игра активна)
-    await handle_word_answer(update, context)
+    # --- 3. НАЖАТИЕ НА КНОПКИ ГЛАВНОГО МЕНЮ ---
+    menu_buttons = [
+        "📅 Расписание", "📝 Заметки", "⏰ Напоминания", 
+        "🌤 Погода", "🎮 Игры", "🧩 Угадай слово", "⏹ Остановить игру в слова"
+    ]
+    if text in menu_buttons:
+        await menu_choice(update, context)
+        return
 
-    # Проверяем нажатия на обычные текстовые кнопки меню
-    await menu_choice(update, context)
+    # --- 4. ИГРА В СЛОВА И ВСЁ ОСТАЛЬНОЕ ---
+    await handle_word_answer(update, context)
 
 
 # --- Регистрация всех обработчиков (Хэндлеров) ---
-app.add_handler(notes.add_handler)
+# app.add_handler(notes.add_handler) # Отключен, так как логика теперь внутри единого текстового хэндлера
+
 app.add_handler(notes.show_handler)
 app.add_handler(notes.delete_handler)
 app.add_handler(reminders.handler)
