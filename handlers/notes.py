@@ -83,12 +83,20 @@ async def delete_notes_list(user_id, query=None, message=None):
     elif message:
         await message.reply_text(text)
 
-# добавить заметку
+# добавить заметку (Универсальная функция)
 async def add_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("Используй: /addnote текст заметки")
+    # Если функция вызвана через текстовый ввод (note_mode == "add"), 
+    # текст лежит в update.message.text. 
+    # Если через команду /addnote, то текст лежит в context.args.
+    if context.args:
+        text = " ".join(context.args)
+    else:
+        text = update.message.text
+
+    if not text or text.startswith('/addnote'):
+        await update.message.reply_text("Используй: /addnote текст заметки или просто напиши текст.")
         return
+
     conn = connect()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO notes (user_id, text) VALUES (?, ?)", (update.effective_user.id, text))
@@ -111,4 +119,4 @@ async def delete_note_by_id(note_id, user_id):
 # регистрация команд
 add_handler = CommandHandler("addnote", add_note)
 show_handler = CommandHandler("notes", show_notes)
-delete_handler = CommandHandler("delnote", show_notes)  # переходим к просмотру заметок
+delete_handler = CommandHandler("delnote", show_notes)
