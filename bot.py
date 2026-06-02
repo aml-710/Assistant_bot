@@ -188,11 +188,14 @@ async def notes_text_handler(update, context):
         context.user_data["reminder_mode"] = None
         return
 
+    # Проверяем ответы в игре (если игра активна)
     await handle_word_answer(update, context)
 
+    # Проверяем нажатия на обычные текстовые кнопки меню
     await menu_choice(update, context)
 
 
+# --- Регистрация всех обработчиков (Хэндлеров) ---
 app.add_handler(notes.add_handler)
 app.add_handler(notes.show_handler)
 app.add_handler(notes.delete_handler)
@@ -201,15 +204,16 @@ app.add_handler(reminders.handler)
 app.add_handler(schedule_handler)
 app.add_handler(callback_handler)
 
+# Обработка инлайн-кнопок
 app.add_handler(CallbackQueryHandler(notes_button_handler, pattern="^(note_|reminder_)(.*)$"))
 app.add_handler(CallbackQueryHandler(view_note_handler, pattern="^view_note_"))
 app.add_handler(CallbackQueryHandler(delete_note_handler, pattern="^delete_note_"))
 
+# Единый обработчик текстовых сообщений
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, notes_text_handler))
 
-print("Bot launched!")
-app.run_polling()
 
+# --- Точка входа для запуска проекта ---
 if __name__ == "__main__":
-    create_tables()
-    application.run_polling()
+    print("Bot launched successfully!")
+    app.run_polling()
